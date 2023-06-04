@@ -58,7 +58,7 @@ pub struct PortMapping {
 impl Container {
     async fn new(docker: Rc<Docker>, opts: NewContainerOpts) -> Container {
         log::info!("starting container");
-        let response = docker
+            let response = docker
             .create_container::<&str, String>(
                 None,
                 Config {

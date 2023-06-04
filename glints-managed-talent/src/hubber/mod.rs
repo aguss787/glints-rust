@@ -3,7 +3,7 @@ mod models;
 use async_trait::async_trait;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
-use glints_infra::diesel_schema::hubbers::table as hubbers;
+use glints_infra::diesel_schema::hubbers;
 use glints_infra::postgresql::AsyncPgConnectionPool;
 use shaku::{Component, Interface};
 use std::sync::Arc;
@@ -31,7 +31,8 @@ pub trait HubberAPI: Interface {
 impl HubberAPI for HubberService {
     async fn list_hubber(&self) -> Vec<Hubber> {
         let mut connection = self.db_connection_pool.get().await.expect("todo");
-        let result = hubbers
+        let result = hubbers::dsl::hubbers
+            .order(hubbers::dsl::code)
             .limit(10)
             .load::<models::Hubber>(&mut connection)
             .await

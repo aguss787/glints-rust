@@ -1,6 +1,9 @@
 use crate::common::{DockerEnv, GraphQLQuery, HealthConfig, NewContainerOpts, PortMapping};
+use actix_web::body::to_bytes;
 use actix_web::test::TestRequest;
+use diesel::migration::{Migration, MigrationSource};
 use log::LevelFilter::Info;
+use serde::Deserialize;
 use std::future::Future;
 use std::panic;
 
@@ -45,6 +48,22 @@ fn test_async_with_time() {
             docker_env
         })());
 
+        log::info!("initializing database");
+        let migrations =
+            diesel_migrations::FileBasedMigrations::from_path("../glints-infra/migrations")
+                .unwrap();
+
+        use diesel::pg::PgConnection;
+        use diesel::prelude::*;
+        let mut conn =
+            PgConnection::establish("postgresql://glints:glints@localhost:5432/managed_talent")
+                .unwrap();
+
+        let migrations = migrations.migrations().unwrap();
+        for m in migrations {
+            m.run(&mut conn).unwrap();
+        }
+
         log::info!("running test");
         let result = runtime.block_on((|| async move { actix_web::rt::spawn(f()).await })());
 
@@ -73,18 +92,54 @@ fn test_async_with_time() {
             .set_json(GraphQLQuery {
                 query: "{
                     hubbers {
-                        id
                         name
-                        computedString
+                        code
                     }
                 }"
                 .to_string(),
             })
             .to_request();
         let resp = actix_web::test::call_service(&app, req).await;
-
-        log::info!("{:?}", resp);
-
         assert!(resp.status().is_success());
+
+        log::info!("{:?}", resp.response().body());
+
+        let body_bytes = to_bytes(resp.into_body()).await.unwrap();
+        let resp: GraphQLResponse<HubberResponse> =
+            serde_json::from_slice(&body_bytes[..]).unwrap();
+
+        assert_eq!(
+            resp,
+            GraphQLResponse {
+                data: HubberResponse {
+                    hubbers: vec![
+                        Hubber {
+                            code: "GLID-EX-1".to_string(),
+                            name: "CAT".to_string(),
+                        },
+                        Hubber {
+                            code: "GLID-EX-2".to_string(),
+                            name: "DOG".to_string(),
+                        }
+                    ]
+                }
+            }
+        )
     })
+}
+
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+struct GraphQLResponse<T> {
+    data: T,
+}
+
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+struct HubberResponse {
+    hubbers: Vec<Hubber>,
+}
+
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+struct Hubber {
+    code: String,
+    name: String,
 }
