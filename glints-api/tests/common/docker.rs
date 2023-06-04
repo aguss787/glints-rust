@@ -144,8 +144,12 @@ impl Container {
                     return Ok(());
                 }
                 Some(health) => match health {
-                    HealthStatusEnum::HEALTHY => return Ok(()),
-                    _ => actix_web::rt::time::sleep(std::time::Duration::from_millis(100)).await,
+                    HealthStatusEnum::HEALTHY => {
+                        // Add another second here to make sure that everything is initialized
+                        actix_web::rt::time::sleep(std::time::Duration::from_secs(1)).await;
+                        return Ok(());
+                    }
+                    _ => actix_web::rt::time::sleep(std::time::Duration::from_millis(500)).await,
                 },
             }
         }

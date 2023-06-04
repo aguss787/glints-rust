@@ -71,6 +71,21 @@ fn test_get_all_hubbers() {
 }
 
 #[test]
-fn test_second() {
-    test_get_all_hubbers()
+fn test_2() {
+    test_get_all_hubbers();
+}
+
+#[test]
+fn test_3() {
+    test_get_all_hubbers();
+}
+
+#[test]
+fn test_4() {
+    test_get_all_hubbers();
+}
+
+#[test]
+fn test_5() {
+    test_get_all_hubbers();
 }

@@ -7,6 +7,9 @@ use std::thread::ThreadId;
 
 mod schema;
 
+// TODO: make this module only available during testing
+pub mod tests;
+
 static CONFIG_MAP: Lazy<RwLock<HashMap<ThreadId, GlintsConfig>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 static DEFAULT_CONFIG: Lazy<GlintsConfig> = Lazy::new(|| GlintsConfig::read());

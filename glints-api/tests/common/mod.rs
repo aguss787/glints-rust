@@ -1,4 +1,5 @@
 use crate::common::docker::{DockerEnv, NewContainerOpts, PortMapping};
+use crate::common::ports::allocate_port;
 pub use bollard::models::HealthConfig;
 use diesel::migration::MigrationSource;
 use log::LevelFilter;
@@ -6,6 +7,7 @@ use serde::Serialize;
 use std::future::Future;
 
 mod docker;
+mod ports;
 
 #[derive(Serialize)]
 pub struct GraphQLQuery {
@@ -14,7 +16,19 @@ pub struct GraphQLQuery {
 
 static INITIALIZE_LOGGER: std::sync::Once = std::sync::Once::new();
 
-async fn setup_docker(mut docker_env: DockerEnv) -> DockerEnv {
+struct Ports {
+    postgres: usize,
+}
+
+impl Ports {
+    fn new() -> Self {
+        Ports {
+            postgres: allocate_port(),
+        }
+    }
+}
+
+async fn setup_docker(mut docker_env: DockerEnv, ports: &Ports) -> DockerEnv {
     docker_env
         .add_container(NewContainerOpts {
             image: "postgres:14".to_string(),
@@ -24,7 +38,7 @@ async fn setup_docker(mut docker_env: DockerEnv) -> DockerEnv {
                 "POSTGRES_PASSWORD=glints".to_string(),
             ],
             ports: vec![PortMapping {
-                host_port: "5432".to_string(),
+                host_port: ports.postgres.to_string(),
                 container_port: "5432".to_string(),
                 container_protocol: "tcp".to_string(),
             }],
@@ -51,27 +65,36 @@ where
     Fut: Future<Output = ()> + 'static,
 {
     INITIALIZE_LOGGER.call_once(|| {
-        env_logger::builder()
-            .filter_level(LevelFilter::Debug)
-            .init();
+        env_logger::builder().filter_level(LevelFilter::Info).init();
     });
 
+    let ports = Ports::new();
     let runtime = actix_web::rt::Runtime::new().expect("failed to initialize async runtime");
 
+    glints_config::tests::overwrite_config_for_current_thread(|config| {
+        config.postgres.database_url = format!(
+            "postgresql://glints:glints@localhost:{}/managed_talent",
+            ports.postgres,
+        );
+    });
+
     let docker_env = DockerEnv::new().expect("failed to initialize docker env");
-    let _docker_env = runtime.block_on(setup_docker(docker_env));
+    let _docker_env = runtime.block_on(setup_docker(docker_env, &ports));
 
     {
         log::debug!("initializing database");
+        // TODO: Remove the hard coded path
         let migrations =
             diesel_migrations::FileBasedMigrations::from_path("../glints-infra/migrations")
                 .expect("failed to initialize diesel migration");
 
         use diesel::pg::PgConnection;
         use diesel::prelude::*;
-        let mut conn =
-            PgConnection::establish("postgresql://glints:glints@localhost:5432/managed_talent")
-                .expect("failed to connect to database for migration");
+        let mut conn = PgConnection::establish(&format!(
+            "postgresql://glints:glints@localhost:{}/managed_talent",
+            ports.postgres
+        ))
+        .expect("failed to connect to database for migration");
 
         let migrations = migrations
             .migrations()
