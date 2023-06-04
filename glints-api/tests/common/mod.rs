@@ -1,158 +1,95 @@
-use bollard::container::{Config, RemoveContainerOptions, StartContainerOptions};
-use bollard::models::{HealthStatusEnum, PortBinding};
-use bollard::secret::HostConfig;
-use bollard::Docker;
-use serde::Serialize;
-use std::collections::HashMap;
-use std::rc::Rc;
-
+use crate::common::docker::{DockerEnv, NewContainerOpts, PortMapping};
 pub use bollard::models::HealthConfig;
+use diesel::migration::MigrationSource;
+use log::LevelFilter;
+use serde::Serialize;
+use std::future::Future;
 
-struct Container {
-    docker: Rc<Docker>,
-    id: String,
-}
-
-impl Drop for Container {
-    fn drop(&mut self) {
-        let runtime = actix_web::rt::Runtime::new().expect("unable to build runtime");
-
-        runtime.block_on((|| async move {
-            let _y = self.docker.inspect_container(&self.id, None).await;
-            log::info!("{:?}", _y.unwrap().state.unwrap());
-
-            log::info!("removing container {}", self.id);
-            let resp = self
-                .docker
-                .remove_container(
-                    &self.id,
-                    Some(RemoveContainerOptions {
-                        v: true,
-                        force: true,
-                        link: false,
-                    }),
-                )
-                .await;
-
-            if let Err(err) = resp {
-                log::error!("{}", err.to_string());
-            }
-        })());
-        // self.docker.stop_container()
-    }
-}
-
-pub struct NewContainerOpts {
-    pub image: String,
-    pub env: Vec<String>,
-    pub ports: Vec<PortMapping>,
-    pub health_check: Option<HealthConfig>,
-}
-
-pub struct PortMapping {
-    pub container_port: String,
-    pub container_protocol: String,
-    pub host_port: String,
-}
-
-impl Container {
-    async fn new(docker: Rc<Docker>, opts: NewContainerOpts) -> Container {
-        log::info!("starting container");
-            let response = docker
-            .create_container::<&str, String>(
-                None,
-                Config {
-                    image: Some(opts.image),
-                    env: Some(opts.env),
-                    exposed_ports: Some(HashMap::from_iter(opts.ports.iter().map(|p| {
-                        (
-                            format!("{}/{}", p.container_port, p.container_protocol),
-                            HashMap::new(),
-                        )
-                    }))),
-                    host_config: Some(HostConfig {
-                        port_bindings: Some(HashMap::from_iter(opts.ports.into_iter().map(|p| {
-                            (
-                                format!("{}/{}", p.container_port, p.container_protocol),
-                                Some(vec![PortBinding {
-                                    host_port: Some(p.host_port),
-                                    host_ip: None,
-                                }]),
-                            )
-                        }))),
-                        ..Default::default()
-                    }),
-                    healthcheck: opts.health_check,
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("todo: unable to create container");
-
-        docker
-            .start_container(&response.id, None::<StartContainerOptions<String>>)
-            .await
-            .expect("unable to start container");
-
-        let container = Container {
-            docker,
-            id: response.id,
-        };
-
-        container
-            .wait_until_ready(std::time::Duration::from_secs(30))
-            .await;
-        container
-    }
-
-    async fn wait_until_ready(&self, time_limit: std::time::Duration) {
-        let start_time = std::time::Instant::now();
-        while std::time::Instant::now() - start_time <= time_limit {
-            let resp = self
-                .docker
-                .inspect_container(&self.id, None)
-                .await
-                .expect("failed to get status");
-
-            let health = resp.state.and_then(|o| o.health).and_then(|o| o.status);
-            log::info!("{:?}", health);
-            match health {
-                None => {
-                    log::warn!("missing health info for container {}", self.id);
-                    return;
-                }
-                Some(health) => match health {
-                    HealthStatusEnum::HEALTHY => return,
-                    _ => actix_web::rt::time::sleep(std::time::Duration::from_millis(100)).await,
-                },
-            }
-        }
-    }
-}
-
-pub struct DockerEnv {
-    docker: Rc<Docker>,
-    containers: Vec<Container>,
-}
-
-impl DockerEnv {
-    pub fn new() -> Self {
-        log::info!("starting testing docker env");
-        let docker = Docker::connect_with_socket_defaults().expect("unable to build docker client");
-
-        DockerEnv {
-            docker: Rc::new(docker),
-            containers: vec![],
-        }
-    }
-
-    pub async fn add_container(&mut self, opts: NewContainerOpts) {
-        self.containers
-            .push(Container::new(self.docker.clone(), opts).await);
-    }
-}
+mod docker;
 
 #[derive(Serialize)]
 pub struct GraphQLQuery {
     pub query: String,
+}
+
+static INITIALIZE_LOGGER: std::sync::Once = std::sync::Once::new();
+
+async fn setup_docker(mut docker_env: DockerEnv) -> DockerEnv {
+    docker_env
+        .add_container(NewContainerOpts {
+            image: "postgres:14".to_string(),
+            env: vec![
+                "POSTGRES_DB=managed_talent".to_string(),
+                "POSTGRES_USER=glints".to_string(),
+                "POSTGRES_PASSWORD=glints".to_string(),
+            ],
+            ports: vec![PortMapping {
+                host_port: "5432".to_string(),
+                container_port: "5432".to_string(),
+                container_protocol: "tcp".to_string(),
+            }],
+            health_check: Some(HealthConfig {
+                test: Some(vec![
+                    "CMD-SHELL".to_string(),
+                    "/usr/bin/pg_isready".to_string(),
+                ]),
+                interval: Some(500 * 1000000),
+                timeout: Some(1000 * 1000000),
+                retries: Some(10),
+                start_period: Some(5000 * 1000000),
+            }),
+        })
+        .await
+        .expect("failed to prepare docker container");
+
+    docker_env
+}
+
+pub fn wrapper<T, Fut>(f: T)
+where
+    T: FnOnce() -> Fut,
+    Fut: Future<Output = ()> + 'static,
+{
+    INITIALIZE_LOGGER.call_once(|| {
+        env_logger::builder()
+            .filter_level(LevelFilter::Debug)
+            .init();
+    });
+
+    let runtime = actix_web::rt::Runtime::new().expect("failed to initialize async runtime");
+
+    let docker_env = DockerEnv::new().expect("failed to initialize docker env");
+    let _docker_env = runtime.block_on(setup_docker(docker_env));
+
+    {
+        log::debug!("initializing database");
+        let migrations =
+            diesel_migrations::FileBasedMigrations::from_path("../glints-infra/migrations")
+                .expect("failed to initialize diesel migration");
+
+        use diesel::pg::PgConnection;
+        use diesel::prelude::*;
+        let mut conn =
+            PgConnection::establish("postgresql://glints:glints@localhost:5432/managed_talent")
+                .expect("failed to connect to database for migration");
+
+        let migrations = migrations
+            .migrations()
+            .expect("failed to get diesel migrations");
+        for m in migrations {
+            m.run(&mut conn).expect("failed to run migration");
+        }
+    }
+
+    log::debug!("running test");
+    let result = runtime.block_on((|| async move { actix_web::rt::spawn(f()).await })());
+
+    match result {
+        Ok(_) => {}
+        Err(err) => {
+            if err.is_panic() {
+                std::panic::resume_unwind(err.into_panic());
+            }
+        }
+    }
 }
