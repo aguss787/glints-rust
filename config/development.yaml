@@ -1,0 +1,2 @@
+postgres:
+  database_url: postgresql://glints:glints@localhost:5432/managed_talent

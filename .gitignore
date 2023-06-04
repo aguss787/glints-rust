@@ -1,0 +1,5 @@
+/target
+
+glints-infra/.env
+postgres-data
+.idea

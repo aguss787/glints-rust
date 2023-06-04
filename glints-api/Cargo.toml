@@ -1,0 +1,29 @@
+[package]
+name = "glints-api"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+graphql-playground = []
+json-logger = []
+
+[[bin]]
+name = "glints-api"
+path = "src/main.rs"
+
+[dependencies]
+actix-web = "4.3.1"
+async-graphql = "5.0.8"
+async-graphql-actix-web = "5.0.8"
+glints-managed-talent = { path = "../glints-managed-talent" }
+glints-config = { version = "0.1.0", path = "../glints-config" }
+serde = "1.0.163"
+serde_json = "1.0.96"
+shaku = "0.6.1"
+log = { version = "0.4.17", features = ["kv_unstable_std"] }
+kv-log-macro = "1.0.7"
+json_env_logger = { version = "0.1.1", features = ["iso-timestamps"] }
+env_logger = "0.10.0"
+
+[dev-dependencies]
+bollard = "0.14.0"

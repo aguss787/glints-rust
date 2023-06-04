@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "glints-api",
+    "glints-managed-talent",
+    "glints-config",
+    "glints-infra",
+]
+default-members = ["glints-api"]
