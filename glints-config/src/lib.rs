@@ -1,11 +1,12 @@
+mod schema;
+
 use once_cell::sync::Lazy;
-pub use schema::GlintsConfig;
 use shaku::{module, Component, Module, ModuleBuildContext};
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::thread::ThreadId;
 
-mod schema;
+pub use schema::*;
 
 // TODO: make this module only available during testing
 pub mod tests;

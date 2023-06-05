@@ -59,7 +59,7 @@ async fn setup_docker(mut docker_env: DockerEnv, ports: &Ports) -> DockerEnv {
     docker_env
 }
 
-pub fn wrapper<T, Fut>(f: T)
+pub fn docker_test<T, Fut>(f: T)
 where
     T: FnOnce() -> Fut,
     Fut: Future<Output = ()> + 'static,
@@ -102,6 +102,8 @@ where
         for m in migrations {
             m.run(&mut conn).expect("failed to run migration");
         }
+
+        // TODO: seed data
     }
 
     log::debug!("running test");

@@ -1,9 +1,11 @@
+use crate::errors::InfraError;
+use crate::InfraResult;
+use anyhow::anyhow;
 use diesel_async::pooled_connection::mobc::Pool;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncConnection, AsyncPgConnection};
 use glints_config::GlintsConfig;
 use shaku::{Component, HasComponent, Module, ModuleBuildContext};
-use std::ops::Deref;
 use std::sync::Arc;
 
 pub struct AsyncPgConnectionPool {
@@ -34,16 +36,13 @@ impl<M: Module + HasComponent<GlintsConfig>> Component<M> for AsyncPgConnectionP
     }
 }
 
-impl Deref for AsyncPgConnectionPool {
-    type Target = Pool<AsyncPgConnection>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.pool
-    }
-}
-
 impl AsyncPgConnectionPool {
-    async fn _get_connection(&self) -> impl AsyncConnection {
-        self.pool.get().await.unwrap()
+    pub async fn get_connection(
+        &self,
+    ) -> InfraResult<impl AsyncConnection<Backend = diesel::pg::Pg>> {
+        self.pool
+            .get()
+            .await
+            .map_err(|o| InfraError::DatabaseConnectionPoolError { source: anyhow!(o) })
     }
 }

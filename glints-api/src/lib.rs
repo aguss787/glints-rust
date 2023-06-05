@@ -1,14 +1,16 @@
-pub mod graphql;
-pub mod schema;
+mod errors;
+mod graphql;
+mod schema;
 
-use crate::schema::Query;
-use actix_web::guard;
-use actix_web::web::{resource, Data, ServiceConfig};
-use async_graphql::{EmptyMutation, EmptySubscription, Schema};
 use glints_config::{ConfigModule, GlintsConfig};
-use glints_managed_talent::HubberAPI;
+use glints_managed_talent::hubber::HubberAPI;
 use glints_managed_talent::ManagedTalentModule;
 use shaku::module;
+
+type GraphQLResult<T> = Result<T, errors::GraphQlErrorWrapper>;
+
+pub use graphql::configure_actix;
+pub use schema::build as build_schema;
 
 module! {
     pub APIModule {
@@ -34,22 +36,5 @@ impl Default for APIModule {
             ConfigModule::default().into(),
         )
         .build()
-    }
-}
-
-pub fn configure_actix(
-    schema: Schema<Query, EmptyMutation, EmptySubscription>,
-) -> impl FnOnce(&mut ServiceConfig) {
-    |config: &mut ServiceConfig| {
-        config
-            .app_data(Data::new(schema))
-            .service(resource("/").guard(guard::Post()).to(graphql::index));
-
-        #[cfg(feature = "graphql-playground")]
-        config.service(
-            resource("/")
-                .guard(guard::Get())
-                .to(graphql::graphql_playground),
-        );
     }
 }

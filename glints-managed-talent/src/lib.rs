@@ -1,10 +1,8 @@
-mod hubber;
+pub mod hubber;
 
 use glints_infra::postgresql::AsyncPgConnectionPool;
 use glints_infra::InfraModule;
 use shaku::module;
-
-pub use hubber::HubberAPI;
 
 module! {
     pub ManagedTalentModule {

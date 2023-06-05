@@ -48,7 +48,7 @@ impl GlintsConfig {
     /// Config value can be overridden using env variable with the following format:
     ///   - GLINTS_<key 1>.<key 2>.<key 3>...<key n>
     ///   - example: GLINTS_POSTGRES.DATABASE_URL
-    pub fn read() -> Self {
+    pub(crate) fn read() -> Self {
         Self::read_with_source(None)
     }
 

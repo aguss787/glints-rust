@@ -10,4 +10,5 @@ diesel-async = { version = "0.3.0", features = ["postgres", "mobc"] }
 shaku = "0.6.1"
 glints-config = { version = "0.1.0", path = "../glints-config" }
 diesel = { version = "2.0.4", features = ["postgres"] }
-
+thiserror = "1.0.40"
+anyhow = "1.0.71"

@@ -23,12 +23,12 @@ struct Hubber {
 
 #[test]
 fn test_get_all_hubbers() {
-    common::wrapper(|| async {
+    common::docker_test(|| async {
         let api_module = glints_api::APIModule::default();
         let schema = glints_api::schema::build(api_module);
 
         let app = actix_web::test::init_service(
-            actix_web::App::new().configure(glints_api::configure_actix(schema.clone())),
+            actix_web::App::new().configure(glints_api::graphql::configure_actix(schema.clone())),
         )
         .await;
 

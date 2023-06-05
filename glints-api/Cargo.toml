@@ -24,10 +24,12 @@ log = { version = "0.4.17", features = ["kv_unstable_std"] }
 kv-log-macro = "1.0.7"
 json_env_logger = { version = "0.1.1", features = ["iso-timestamps"] }
 env_logger = "0.10.0"
+anyhow = "1.0.71"
+thiserror = "1.0.40"
+async-trait = "0.1.68"
 
 [dev-dependencies]
 bollard = "0.14.0"
 diesel = { version = "2.0.4", features = ["postgres"] }
 diesel_migrations = { version = "2.1.0", features = ["postgres"] }
-thiserror = "1.0.40"
 

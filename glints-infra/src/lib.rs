@@ -1,8 +1,12 @@
 pub mod diesel_schema;
+pub mod errors;
 pub mod postgresql;
 
+use crate::errors::InfraError;
 use glints_config::{ConfigModule, GlintsConfig};
 use shaku::module;
+
+pub type InfraResult<T> = Result<T, InfraError>;
 
 module! {
     pub InfraModule {

@@ -3,7 +3,8 @@ use glints_config::GlintsConfig;
 use kv_log_macro::info;
 use log::LevelFilter;
 
-use glints_api::{configure_actix, APIModule};
+use glints_api::configure_actix;
+use glints_api::APIModule;
 use shaku::HasComponent;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -27,7 +28,7 @@ async fn main() -> std::io::Result<()> {
     initialize_logging(&(config.logging.level));
 
     info!("listening in 0.0.0.0:{}", config.api_http_server.port);
-    let schema = glints_api::schema::build(api_module);
+    let schema = glints_api::build_schema(api_module);
     HttpServer::new(move || App::new().configure(configure_actix(schema.clone())))
         .bind(("0.0.0.0", config.api_http_server.port))?
         .run()
